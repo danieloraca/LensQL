@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anyhow = "1.0.100"
 crossterm = "0.29.0"
 directories = "6.0.0"
 keyring = "3.6.3"
