@@ -38,11 +38,7 @@ pub struct StatusState {
 pub struct ConnectionsState {
     pub selected: usize,
     pub items: Vec<ConnectionItem>,
-
-    /// When present, the "Add Connection" modal is open and editing this draft.
     pub adding: Option<NewConnectionDraft>,
-
-    /// When present, the "Delete Connection?" confirmation modal is open.
     pub delete_confirm: Option<DeleteConnectionConfirm>,
 }
 
@@ -67,6 +63,7 @@ pub struct NewConnectionDraft {
     pub password: String,
     pub database: String,
     pub field: usize, // 0..5
+    pub is_edit: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -80,7 +77,22 @@ impl NewConnectionDraft {
         Self {
             id: Ulid::new(),
             port: "3306".to_string(),
+            is_edit: false,
             ..Default::default()
+        }
+    }
+
+    pub fn edit_from(item: &ConnectionItem) -> Self {
+        Self {
+            id: item.id,
+            name: item.name.clone(),
+            host: item.host.clone(),
+            port: item.port.to_string(),
+            user: item.user.clone(),
+            password: item.password.clone(),
+            database: item.db.clone(),
+            field: 0,
+            is_edit: true,
         }
     }
 }

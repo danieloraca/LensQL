@@ -38,6 +38,7 @@ pub fn map_key(state: &AppState, key: KeyEvent) -> Option<Action> {
     if state.screen == Screen::Connections {
         match key.code {
             KeyCode::Char('a') => return Some(Action::OpenAddConnection),
+            KeyCode::Char('e') => return Some(Action::EditSelectedConnection),
             KeyCode::Char('d') => return Some(Action::DeleteSelectedConnection),
             _ => {}
         }

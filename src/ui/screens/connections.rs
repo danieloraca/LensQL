@@ -23,7 +23,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
     let list = List::new(items)
         .block(
             Block::default()
-                .title("Connections (a:add, d:delete, Enter:connect)")
+                .title("Connections (a:add, e:edit, d:delete, Enter:connect)")
                 .borders(Borders::ALL),
         )
         .highlight_symbol("> ");
@@ -40,7 +40,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
         f.render_widget(Clear, popup);
 
         let block = Block::default()
-            .title("Add Connection")
+            .title(if d.is_edit { "Edit Connection" } else { "Add Connection" })
             .borders(Borders::ALL);
         f.render_widget(block, popup);
 

@@ -34,7 +34,7 @@ fn build_profiles(
 }
 
 pub fn reduce_action(state: &mut AppState, action: Action) -> Vec<Command> {
-    // --- Modal first: if add-connection modal is open, most actions operate on it ---
+    // --- Modal first: if add/edit connection modal is open, most actions operate on it ---
     if state.screen == Screen::Connections && state.connections.adding.is_some() {
         match action {
             Action::CancelModal | Action::Back => {
@@ -74,7 +74,7 @@ pub fn reduce_action(state: &mut AppState, action: Action) -> Vec<Command> {
             }
 
             Action::Confirm => {
-                // Enter = Save
+                // Enter = Save (add or edit)
                 let Some(d) = state.connections.adding.take() else {
                     return vec![];
                 };
@@ -118,9 +118,16 @@ pub fn reduce_action(state: &mut AppState, action: Action) -> Vec<Command> {
                     return vec![];
                 }
 
-                state.connections.items.push(item);
-                state.connections.selected = state.connections.items.len().saturating_sub(1);
-                state.status.message = "Connection added (saving…)".to_string();
+                // Upsert by id: if exists, replace; else append.
+                if let Some(idx) = state.connections.items.iter().position(|c| c.id == item.id) {
+                    state.connections.items[idx] = item;
+                    state.connections.selected = idx;
+                    state.status.message = "Connection updated (saving…)".to_string();
+                } else {
+                    state.connections.items.push(item);
+                    state.connections.selected = state.connections.items.len().saturating_sub(1);
+                    state.status.message = "Connection added (saving…)".to_string();
+                }
 
                 let profiles = build_profiles(&state.connections.items);
                 return vec![Command::Storage(StorageCommand::SaveConnections {
@@ -160,6 +167,22 @@ pub fn reduce_action(state: &mut AppState, action: Action) -> Vec<Command> {
             state.connections.adding = Some(NewConnectionDraft::new());
             state.status.message =
                 "Add connection: Tab/Shift+Tab move • Enter save • Esc cancel".to_string();
+            vec![]
+        }
+
+        Action::EditSelectedConnection => {
+            let Some(item) = state
+                .connections
+                .items
+                .get(state.connections.selected)
+            else {
+                state.status.message = "No connection selected".to_string();
+                return vec![];
+            };
+
+            state.connections.adding = Some(NewConnectionDraft::edit_from(item));
+            state.status.message =
+                "Edit connection: Tab/Shift+Tab move • Enter save • Esc cancel".to_string();
             vec![]
         }
 

@@ -41,9 +41,14 @@ pub async fn run() -> Result<(), errors::AppError> {
                 errors::AppError::Config(format!("Invalid connection id ULID: {}", e))
             })?;
 
-            let password = secrets
-                .get_password(&c.id)?
-                .unwrap_or_default();
+            let password_opt = secrets.get_password(&c.id)?;
+            if password_opt.is_none() {
+                state.status.message = format!(
+                    "Missing keyring password for '{}' (id {}). Re-add/edit connection to set it.",
+                    c.name, c.id
+                );
+            }
+            let password = password_opt.unwrap_or_default();
 
             Ok(app::state::ConnectionItem {
                 id,
