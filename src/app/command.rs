@@ -1,6 +1,14 @@
 #[derive(Debug, Clone)]
 pub enum Command {
     Db(DbCommand),
+    Storage(StorageCommand),
+}
+
+#[derive(Debug, Clone)]
+pub enum StorageCommand {
+    SaveConnections {
+        connections: Vec<crate::storage::model::ConnectionProfile>,
+    },
 }
 
 #[derive(Debug, Clone)]

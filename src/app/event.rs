@@ -1,6 +1,13 @@
 #[derive(Debug, Clone)]
 pub enum Event {
     Db(DbEvent),
+    Storage(StorageEvent),
+}
+
+#[derive(Debug, Clone)]
+pub enum StorageEvent {
+    ConnectionsSaved,
+    Error { message: String },
 }
 
 #[derive(Debug, Clone)]

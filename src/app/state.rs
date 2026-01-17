@@ -1,3 +1,5 @@
+use ulid::Ulid;
+
 use super::screen::Screen;
 
 #[derive(Debug)]
@@ -36,10 +38,12 @@ pub struct StatusState {
 pub struct ConnectionsState {
     pub selected: usize,
     pub items: Vec<ConnectionItem>,
+    pub adding: Option<NewConnectionDraft>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ConnectionItem {
+    pub id: Ulid,
     pub name: String,
     pub host: String,
     pub port: u16,
@@ -48,9 +52,31 @@ pub struct ConnectionItem {
     pub db: String,
 }
 
+#[derive(Debug, Default, Clone)]
+pub struct NewConnectionDraft {
+    pub id: Ulid,
+    pub name: String,
+    pub host: String,
+    pub port: String,
+    pub user: String,
+    pub password: String,
+    pub database: String,
+    pub field: usize, // 0..5
+}
+
+impl NewConnectionDraft {
+    pub fn new() -> Self {
+        Self {
+            port: "3306".to_string(),
+            ..Default::default()
+        }
+    }
+}
+
 impl ConnectionItem {
     pub fn new(name: &str, host: &str, port: u16, user: &str, password: &str, db: &str) -> Self {
         Self {
+            id: Ulid::new(),
             name: name.to_string(),
             host: host.to_string(),
             port,

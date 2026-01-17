@@ -18,6 +18,14 @@ pub enum Action {
     ConnectSelected,
     Disconnect,
 
+    // connection
+    OpenAddConnection,
+    CancelModal,
+    NextField,
+    PrevField,
+    Backspace,
+    InputChar(char),
+
     // app control
     Quit,
 }

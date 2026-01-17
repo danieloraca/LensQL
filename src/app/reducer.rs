@@ -1,12 +1,131 @@
 use super::{
     action::Action,
-    command::{Command, DbCommand},
-    event::{DbEvent, Event},
+    command::{Command, DbCommand, StorageCommand},
+    event::{DbEvent, Event, StorageEvent},
     screen::Screen,
-    state::AppState,
+    state::{AppState, NewConnectionDraft},
 };
 
+fn draft_field_mut(d: &mut NewConnectionDraft) -> &mut String {
+    match d.field {
+        0 => &mut d.name,
+        1 => &mut d.host,
+        2 => &mut d.port,
+        3 => &mut d.user,
+        4 => &mut d.password,
+        _ => &mut d.database, // 5
+    }
+}
+
+fn build_profiles(
+    items: &[crate::app::state::ConnectionItem],
+) -> Vec<crate::storage::model::ConnectionProfile> {
+    items
+        .iter()
+        .map(|i| crate::storage::model::ConnectionProfile {
+            id: i.id.to_string(), // <-- FIX: Ulid -> String
+            name: i.name.clone(),
+            host: i.host.clone(),
+            port: i.port,
+            user: i.user.clone(),
+            password: i.password.clone(),
+            database: i.db.clone(),
+        })
+        .collect()
+}
+
 pub fn reduce_action(state: &mut AppState, action: Action) -> Vec<Command> {
+    // --- Modal first: if add-connection modal is open, most actions operate on it ---
+    if state.screen == Screen::Connections && state.connections.adding.is_some() {
+        match action {
+            Action::CancelModal | Action::Back => {
+                state.connections.adding = None;
+                state.status.message = "Cancelled".to_string();
+                return vec![];
+            }
+
+            Action::NextField => {
+                if let Some(d) = state.connections.adding.as_mut() {
+                    d.field = (d.field + 1) % 6;
+                }
+                return vec![];
+            }
+
+            Action::PrevField => {
+                if let Some(d) = state.connections.adding.as_mut() {
+                    d.field = (d.field + 5) % 6;
+                }
+                return vec![];
+            }
+
+            Action::Backspace => {
+                if let Some(d) = state.connections.adding.as_mut() {
+                    draft_field_mut(d).pop();
+                }
+                return vec![];
+            }
+
+            Action::InputChar(c) => {
+                if let Some(d) = state.connections.adding.as_mut() {
+                    if !c.is_control() {
+                        draft_field_mut(d).push(c);
+                    }
+                }
+                return vec![];
+            }
+
+            Action::Confirm => {
+                // Enter = Save
+                let Some(d) = state.connections.adding.take() else {
+                    return vec![];
+                };
+
+                let name = d.name.trim().to_string();
+                let host = d.host.trim().to_string();
+                let user = d.user.trim().to_string();
+                let db = d.database.trim().to_string();
+
+                if name.is_empty() || host.is_empty() || user.is_empty() || db.is_empty() {
+                    state.status.message =
+                        "Missing required fields (name/host/user/database)".to_string();
+                    state.connections.adding = Some(d);
+                    return vec![];
+                }
+
+                let port: u16 = match d.port.trim().parse() {
+                    Ok(p) => p,
+                    Err(_) => {
+                        state.status.message = "Port must be a number (e.g. 3306)".to_string();
+                        state.connections.adding = Some(d);
+                        return vec![];
+                    }
+                };
+
+                let item = crate::app::state::ConnectionItem::new(
+                    &name,
+                    &host,
+                    port,
+                    &user,
+                    &d.password,
+                    &db,
+                );
+
+                state.connections.items.push(item);
+                state.connections.selected = state.connections.items.len().saturating_sub(1);
+                state.status.message = "Connection added (saving…)".to_string();
+
+                let profiles = build_profiles(&state.connections.items);
+                return vec![Command::Storage(StorageCommand::SaveConnections {
+                    connections: profiles,
+                })];
+            }
+
+            // Ignore other actions while modal is open
+            _ => return vec![],
+        }
+    }
+
+    // --- Normal (non-modal) reducer ---
     match action {
         Action::GoConnections => {
             state.screen = Screen::Connections;
@@ -29,6 +148,13 @@ pub fn reduce_action(state: &mut AppState, action: Action) -> Vec<Command> {
             vec![]
         }
 
+        Action::OpenAddConnection => {
+            state.connections.adding = Some(NewConnectionDraft::new());
+            state.status.message =
+                "Add connection: Tab/Shift+Tab move • Enter save • Esc cancel".to_string();
+            vec![]
+        }
+
         Action::Up => {
             match state.screen {
                 Screen::Connections => {
@@ -42,7 +168,6 @@ pub fn reduce_action(state: &mut AppState, action: Action) -> Vec<Command> {
                         state.schema.selected_table -= 1;
                     }
 
-                    // trigger columns load if table changed
                     if state.schema.selected_table != prev {
                         if let Some(table) = state
                             .schema
@@ -90,44 +215,34 @@ pub fn reduce_action(state: &mut AppState, action: Action) -> Vec<Command> {
             vec![]
         }
 
-        Action::Confirm => {
-            match state.screen {
-                Screen::Connections => {
-                    // Connect selected
-                    let Some(item) = state
-                        .connections
-                        .items
-                        .get(state.connections.selected)
-                        .cloned()
-                    else {
-                        return vec![];
-                    };
-                    state.status.message = format!("Connecting to {}…", item.name);
-                    vec![Command::Db(DbCommand::Connect {
-                        name: item.name,
-                        host: item.host,
-                        port: item.port,
-                        user: item.user,
-                        password: item.password,
-                        db: item.db,
-                    })]
-                }
-                Screen::Schema => {
-                    // in v1, Enter can load tables (already loaded post-connect),
-                    // or later show table detail; keep no-op for now
-                    vec![]
-                }
-                _ => vec![],
+        Action::Confirm => match state.screen {
+            Screen::Connections => {
+                let Some(item) = state
+                    .connections
+                    .items
+                    .get(state.connections.selected)
+                    .cloned()
+                else {
+                    return vec![];
+                };
+                state.status.message = format!("Connecting to {}…", item.name);
+                vec![Command::Db(DbCommand::Connect {
+                    name: item.name,
+                    host: item.host,
+                    port: item.port,
+                    user: item.user,
+                    password: item.password,
+                    db: item.db,
+                })]
             }
-        }
+            Screen::Schema => vec![],
+            _ => vec![],
+        },
 
         Action::Back => {
             match state.screen {
-                Screen::Connections => {
-                    // back on connections does nothing
-                }
+                Screen::Connections => { /* no-op */ }
                 _ => {
-                    // simple back behavior: go to schema if connected else connections
                     if !state.status.connection_label.is_empty() {
                         state.screen = Screen::Schema;
                     } else {
@@ -139,9 +254,16 @@ pub fn reduce_action(state: &mut AppState, action: Action) -> Vec<Command> {
         }
 
         Action::Disconnect => vec![Command::Db(DbCommand::Disconnect)],
-
         Action::Quit => vec![],
-        _ => vec![],
+
+        // These are modal-only, ignore when not in modal
+        Action::CancelModal
+        | Action::NextField
+        | Action::PrevField
+        | Action::Backspace
+        | Action::InputChar(_) => vec![],
+
+        Action::Left | Action::Right | Action::ConnectSelected => vec![],
     }
 }
 
@@ -159,6 +281,8 @@ pub fn reduce_event(state: &mut AppState, event: Event) -> Vec<Command> {
                 state.status.message = "Disconnected".to_string();
                 state.schema.tables.clear();
                 state.schema.selected_table = 0;
+                state.schema.columns.clear();
+                state.schema.columns_table = None;
                 state.screen = Screen::Connections;
                 vec![]
             }
@@ -183,7 +307,18 @@ pub fn reduce_event(state: &mut AppState, event: Event) -> Vec<Command> {
                 vec![]
             }
             DbEvent::Error { message } => {
-                state.status.message = format!("Error: {}", message);
+                state.status.message = format!("DB error: {}", message);
+                vec![]
+            }
+        },
+
+        Event::Storage(se) => match se {
+            StorageEvent::ConnectionsSaved => {
+                state.status.message = "Connections saved".to_string();
+                vec![]
+            }
+            StorageEvent::Error { message } => {
+                state.status.message = format!("Storage error: {}", message);
                 vec![]
             }
         },
