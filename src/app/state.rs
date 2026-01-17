@@ -38,7 +38,12 @@ pub struct StatusState {
 pub struct ConnectionsState {
     pub selected: usize,
     pub items: Vec<ConnectionItem>,
+
+    /// When present, the "Add Connection" modal is open and editing this draft.
     pub adding: Option<NewConnectionDraft>,
+
+    /// When present, the "Delete Connection?" confirmation modal is open.
+    pub delete_confirm: Option<DeleteConnectionConfirm>,
 }
 
 #[derive(Debug, Clone)]
@@ -64,9 +69,16 @@ pub struct NewConnectionDraft {
     pub field: usize, // 0..5
 }
 
+#[derive(Debug, Clone)]
+pub struct DeleteConnectionConfirm {
+    pub id: Ulid,
+    pub name: String,
+}
+
 impl NewConnectionDraft {
     pub fn new() -> Self {
         Self {
+            id: Ulid::new(),
             port: "3306".to_string(),
             ..Default::default()
         }
@@ -77,6 +89,26 @@ impl ConnectionItem {
     pub fn new(name: &str, host: &str, port: u16, user: &str, password: &str, db: &str) -> Self {
         Self {
             id: Ulid::new(),
+            name: name.to_string(),
+            host: host.to_string(),
+            port,
+            user: user.to_string(),
+            password: password.to_string(),
+            db: db.to_string(),
+        }
+    }
+
+    pub fn new_with_id(
+        id: Ulid,
+        name: &str,
+        host: &str,
+        port: u16,
+        user: &str,
+        password: &str,
+        db: &str,
+    ) -> Self {
+        Self {
+            id,
             name: name.to_string(),
             host: host.to_string(),
             port,

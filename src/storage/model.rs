@@ -7,6 +7,5 @@ pub struct ConnectionProfile {
     pub host: String,
     pub port: u16,
     pub user: String,
-    pub password: String, // plaintext for v1
     pub database: String,
 }

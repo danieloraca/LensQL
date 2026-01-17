@@ -20,6 +20,13 @@ pub enum Action {
 
     // connection
     OpenAddConnection,
+    DeleteSelectedConnection,
+
+    // delete-confirm modal
+    ConfirmDeleteConnection,
+    CancelDeleteConnection,
+
+    // add-connection modal
     CancelModal,
     NextField,
     PrevField,

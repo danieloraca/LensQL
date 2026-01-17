@@ -10,6 +10,17 @@ pub fn map_key(state: &AppState, key: KeyEvent) -> Option<Action> {
         return Some(Action::Quit);
     }
 
+    // --- Modal: Delete Confirmation (takes priority over everything else) ---
+    if state.screen == Screen::Connections && state.connections.delete_confirm.is_some() {
+        return match key.code {
+            KeyCode::Esc => Some(Action::CancelDeleteConnection),
+            KeyCode::Char('n') => Some(Action::CancelDeleteConnection),
+            KeyCode::Char('y') => Some(Action::ConfirmDeleteConnection),
+            KeyCode::Enter => Some(Action::ConfirmDeleteConnection),
+            _ => None,
+        };
+    }
+
     // --- Modal: Add Connection (takes priority over everything else) ---
     if state.screen == Screen::Connections && state.connections.adding.is_some() {
         return match key.code {
@@ -27,6 +38,7 @@ pub fn map_key(state: &AppState, key: KeyEvent) -> Option<Action> {
     if state.screen == Screen::Connections {
         match key.code {
             KeyCode::Char('a') => return Some(Action::OpenAddConnection),
+            KeyCode::Char('d') => return Some(Action::DeleteSelectedConnection),
             _ => {}
         }
     }

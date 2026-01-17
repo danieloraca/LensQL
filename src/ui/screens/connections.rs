@@ -23,7 +23,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
     let list = List::new(items)
         .block(
             Block::default()
-                .title("Connections (a:add, Enter:connect)")
+                .title("Connections (a:add, d:delete, Enter:connect)")
                 .borders(Borders::ALL),
         )
         .highlight_symbol("> ");
@@ -34,7 +34,7 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
     }
     f.render_stateful_widget(list, area, &mut ls);
 
-    // --- modal ---
+    // --- modal: add connection ---
     if let Some(d) = state.connections.adding.as_ref() {
         let popup = centered_rect(70, 60, area);
         f.render_widget(Clear, popup);
@@ -91,6 +91,39 @@ pub fn render(f: &mut Frame, area: Rect, state: &AppState) {
         let help = Paragraph::new("Tab/Shift+Tab: move • Enter: save • Esc: cancel")
             .alignment(Alignment::Left);
         f.render_widget(help, rows[6]);
+    }
+
+    // --- modal: delete confirm ---
+    if let Some(c) = state.connections.delete_confirm.as_ref() {
+        let popup = centered_rect(60, 25, area);
+        f.render_widget(Clear, popup);
+
+        let block = Block::default()
+            .title("Delete Connection?")
+            .borders(Borders::ALL);
+        f.render_widget(block, popup);
+
+        let inner = Rect {
+            x: popup.x + 2,
+            y: popup.y + 2,
+            width: popup.width - 4,
+            height: popup.height - 4,
+        };
+
+        let rows = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(1), Constraint::Length(1)].as_ref())
+            .split(inner);
+
+        let body = format!(
+            "Are you sure you want to delete:\n\n{}\n\nThis cannot be undone.",
+            c.name
+        );
+        f.render_widget(Paragraph::new(body), rows[0]);
+
+        let help = Paragraph::new("y/Enter: delete  •  n/Esc: cancel")
+            .alignment(Alignment::Left);
+        f.render_widget(help, rows[1]);
     }
 }
 

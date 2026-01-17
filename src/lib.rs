@@ -31,6 +31,9 @@ pub async fn run() -> Result<(), errors::AppError> {
     let repo = FileConnectionRepo::new(path);
     let stored = repo.load_connections()?;
 
+    // --- keyring secrets (passwords) ---
+    let secrets = storage::secrets::ConnectionSecrets::default();
+
     state.connections.items = stored
         .into_iter()
         .map(|c| {
@@ -38,13 +41,17 @@ pub async fn run() -> Result<(), errors::AppError> {
                 errors::AppError::Config(format!("Invalid connection id ULID: {}", e))
             })?;
 
+            let password = secrets
+                .get_password(&c.id)?
+                .unwrap_or_default();
+
             Ok(app::state::ConnectionItem {
                 id,
                 name: c.name,
                 host: c.host,
                 port: c.port,
                 user: c.user,
-                password: c.password,
+                password,
                 db: c.database,
             })
         })

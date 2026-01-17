@@ -3,7 +3,7 @@ use super::{
     command::{Command, DbCommand, StorageCommand},
     event::{DbEvent, Event, StorageEvent},
     screen::Screen,
-    state::{AppState, NewConnectionDraft},
+    state::{AppState, DeleteConnectionConfirm, NewConnectionDraft},
 };
 
 fn draft_field_mut(d: &mut NewConnectionDraft) -> &mut String {
@@ -28,7 +28,6 @@ fn build_profiles(
             host: i.host.clone(),
             port: i.port,
             user: i.user.clone(),
-            password: i.password.clone(),
             database: i.db.clone(),
         })
         .collect()
@@ -101,7 +100,8 @@ pub fn reduce_action(state: &mut AppState, action: Action) -> Vec<Command> {
                     }
                 };
 
-                let item = crate::app::state::ConnectionItem::new(
+                let item = crate::app::state::ConnectionItem::new_with_id(
+                    d.id,
                     &name,
                     &host,
                     port,
@@ -109,6 +109,14 @@ pub fn reduce_action(state: &mut AppState, action: Action) -> Vec<Command> {
                     &d.password,
                     &db,
                 );
+
+                // Store secret (password) in keyring; only persist non-secret fields to disk.
+                if let Err(e) = crate::storage::secrets::ConnectionSecrets::default()
+                    .set_password(&item.id.to_string(), &item.password)
+                {
+                    state.status.message = format!("Failed to store password in keyring: {}", e);
+                    return vec![];
+                }
 
                 state.connections.items.push(item);
                 state.connections.selected = state.connections.items.len().saturating_sub(1);
@@ -154,6 +162,78 @@ pub fn reduce_action(state: &mut AppState, action: Action) -> Vec<Command> {
                 "Add connection: Tab/Shift+Tab move • Enter save • Esc cancel".to_string();
             vec![]
         }
+
+        Action::DeleteSelectedConnection => {
+            if state.connections.items.is_empty() {
+                state.status.message = "No connection to delete".to_string();
+                return vec![];
+            }
+
+            if state.connections.selected >= state.connections.items.len() {
+                state.connections.selected = state.connections.items.len().saturating_sub(1);
+            }
+
+            let Some(item) = state.connections.items.get(state.connections.selected).cloned() else {
+                state.status.message = "No connection to delete".to_string();
+                return vec![];
+            };
+
+            state.connections.delete_confirm = Some(DeleteConnectionConfirm {
+                id: item.id,
+                name: item.name.clone(),
+            });
+
+            state.status.message = format!(
+                "Delete connection '{}'? (y/Enter confirm, n/Esc cancel)",
+                item.name
+            );
+
+            vec![]
+        }
+
+        Action::ConfirmDeleteConnection => {
+            let Some(confirm) = state.connections.delete_confirm.take() else {
+                return vec![];
+            };
+
+            // remove by id (safer than relying on selected index)
+            if let Some(idx) = state.connections.items.iter().position(|c| c.id == confirm.id) {
+                let removed = state.connections.items.remove(idx);
+
+                // keep selection in range
+                if state.connections.selected >= state.connections.items.len() {
+                    state.connections.selected = state.connections.items.len().saturating_sub(1);
+                }
+
+                // Best-effort: clear secret from keyring (implemented as overwrite with empty string).
+                if let Err(e) = crate::storage::secrets::ConnectionSecrets::default()
+                    .delete_password(&removed.id.to_string())
+                {
+                    state.status.message = format!(
+                        "Deleted connection '{}', but failed to clear keyring password: {}",
+                        removed.name, e
+                    );
+                } else {
+                    state.status.message = format!("Deleted connection '{}'", removed.name);
+                }
+
+                let profiles = build_profiles(&state.connections.items);
+                vec![Command::Storage(StorageCommand::SaveConnections {
+                    connections: profiles,
+                })]
+            } else {
+                state.status.message = "Connection already deleted".to_string();
+                vec![]
+            }
+        }
+
+        Action::CancelDeleteConnection => {
+            state.connections.delete_confirm = None;
+            state.status.message = "Delete cancelled".to_string();
+            vec![]
+        }
+
+
 
         Action::Up => {
             match state.screen {
@@ -262,6 +342,9 @@ pub fn reduce_action(state: &mut AppState, action: Action) -> Vec<Command> {
         | Action::PrevField
         | Action::Backspace
         | Action::InputChar(_) => vec![],
+
+        // delete-confirm modal actions are handled above; ignore elsewhere
+        Action::ConfirmDeleteConnection | Action::CancelDeleteConnection => vec![],
 
         Action::Left | Action::Right | Action::ConnectSelected => vec![],
     }
