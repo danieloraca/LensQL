@@ -2,7 +2,7 @@ use tokio::sync::mpsc;
 
 use crate::{
     app::{
-        command::{Command, StorageCommand},
+        command::StorageCommand,
         event::{Event, StorageEvent},
     },
     storage::{file_repo::FileConnectionRepo, repo::ConnectionRepo},

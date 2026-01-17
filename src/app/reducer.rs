@@ -366,9 +366,6 @@ pub fn reduce_action(state: &mut AppState, action: Action) -> Vec<Command> {
         | Action::Backspace
         | Action::InputChar(_) => vec![],
 
-        // delete-confirm modal actions are handled above; ignore elsewhere
-        Action::ConfirmDeleteConnection | Action::CancelDeleteConnection => vec![],
-
         Action::Left | Action::Right | Action::ConnectSelected => vec![],
     }
 }
